@@ -5,7 +5,7 @@
 **A sleek, lightning-fast, cross-platform sidebar task manager.**  
 *Native desktop drawer utility built with Tauri v2, React 19, TypeScript, and Tailwind CSS v4.*
 
-[![Build macOS Application](https://github.com/sriniwas14/tasksider/actions/workflows/build-macos.yml/badge.svg)](https://github.com/sriniwas14/tasksider/actions/workflows/build-macos.yml)
+[![Build & Release All Platforms](https://github.com/sriniwas14/tasksider/actions/workflows/release.yml/badge.svg)](https://github.com/sriniwas14/tasksider/actions/workflows/release.yml)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8D8?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)

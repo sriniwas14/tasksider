@@ -1,13 +1,16 @@
-name: Release
+name: Build & Release All Platforms
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
 
 jobs:
-  release:
+  build-and-release:
     permissions:
       contents: write
     name: Build (${{ matrix.platform }})
@@ -16,10 +19,13 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
+            name: 'macOS (Universal DMG & App)'
             args: '--target universal-apple-darwin'
           - platform: 'ubuntu-22.04'
+            name: 'Linux (AppImage & DEB)'
             args: ''
           - platform: 'windows-latest'
+            name: 'Windows (EXE & MSI)'
             args: ''
 
     runs-on: ${{ matrix.platform }}
@@ -46,7 +52,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Install Frontend Dependencies
         run: bun install
@@ -61,12 +67,21 @@ jobs:
           releaseBody: |
             ### 📋 Tasksider v__VERSION__
             
-            Cross-platform sidebar task manager for **macOS**, **Linux**, and **Windows**.
+            Cross-platform desktop sidebar task manager for **macOS**, **Linux**, and **Windows**.
             
             #### 📦 Downloads
-            - **macOS**: `Tasksider_universal.dmg` (Universal binary for Apple Silicon & Intel)
-            - **Linux**: `.AppImage` (standalone) or `.deb` (Debian/Ubuntu)
-            - **Windows**: `.exe` (NSIS setup installer) or `.msi`
+            - 🍏 **macOS**: `Tasksider_universal.dmg` (Universal binary for Apple Silicon & Intel)
+            - 🐧 **Linux**: `Tasksider_amd64.AppImage` (portable) and `.deb` (Debian/Ubuntu)
+            - 🪟 **Windows**: `Tasksider_x64-setup.exe` (NSIS installer) and `.msi`
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tasksider-${{ matrix.platform }}-bundles
+          path: |
+            src-tauri/target/release/bundle/
+            src-tauri/target/universal-apple-darwin/release/bundle/
+          if-no-files-found: ignore
