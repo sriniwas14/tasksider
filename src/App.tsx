@@ -55,6 +55,8 @@ export function App() {
           setContextMenu((prev) => ({ ...prev, visible: false }));
         } else if (inlineFor) {
           setInlineFor("");
+        } else {
+          handleCloseWindow();
         }
       }
     }
@@ -65,9 +67,8 @@ export function App() {
   async function handleCloseWindow() {
     try {
       if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        await appWindow.hide();
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("hide_window");
       }
     } catch (e) {
       console.warn("Could not hide Tauri window:", e);

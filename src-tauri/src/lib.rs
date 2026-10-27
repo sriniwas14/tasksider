@@ -5,7 +5,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
-use tauri_plugin_global_shortcut::{ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 fn get_tasks_path() -> Option<PathBuf> {
     dirs::config_dir().map(|mut p| {
@@ -21,6 +21,38 @@ fn get_legacy_taskside_path() -> Option<PathBuf> {
         p.push("tasks.json");
         p
     })
+}
+
+fn position_sidebar(window: &tauri::WebviewWindow) {
+    if let Ok(Some(monitor)) = window.primary_monitor() {
+        let screen_size = monitor.size();
+        let screen_pos = monitor.position();
+        let win_width = 380u32;
+        let win_height = screen_size.height;
+
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+            width: win_width,
+            height: win_height,
+        }));
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+            x: screen_pos.x + screen_size.width as i32 - win_width as i32,
+            y: screen_pos.y,
+        }));
+    }
+}
+
+pub fn toggle_sidebar(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let is_visible = window.is_visible().unwrap_or(false);
+        if is_visible {
+            let _ = window.hide();
+        } else {
+            position_sidebar(&window);
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }
 }
 
 #[tauri::command]
@@ -60,33 +92,30 @@ fn save_tasks(data: String) -> Result<(), String> {
 
 #[tauri::command]
 fn toggle_window(app: tauri::AppHandle) -> Result<(), String> {
+    toggle_sidebar(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        let is_visible = window.is_visible().unwrap_or(false);
-        if is_visible {
-            window.hide().map_err(|e| e.to_string())?;
-        } else {
-            window.show().map_err(|e| e.to_string())?;
-            window.set_focus().map_err(|e| e.to_string())?;
-        }
+        let _ = window.hide();
     }
+    Ok(())
+}
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let shortcut_builder = tauri_plugin_global_shortcut::Builder::new()
-        .with_shortcuts(["Alt+Space", "CommandOrControl+Shift+T"])
-        .unwrap()
         .with_handler(|app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                if let Some(w) = app.get_webview_window("main") {
-                    let is_vis = w.is_visible().unwrap_or(false);
-                    if is_vis {
-                        let _ = w.hide();
-                    } else {
-                        let _ = w.show().and_then(|_| w.set_focus());
-                    }
-                }
+                toggle_sidebar(app);
             }
         });
 
@@ -95,54 +124,66 @@ pub fn run() {
         .plugin(shortcut_builder.build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
+                position_sidebar(&window);
                 let _ = window.show();
+                let _ = window.unminimize();
                 let _ = window.set_focus();
             }
         }))
+        // Intercept close event: hide window instead of exiting process
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             load_tasks,
             save_tasks,
-            toggle_window
+            toggle_window,
+            hide_window,
+            quit_app
         ])
         .setup(|app| {
-            // Position the window docked to the right edge of the screen
-            if let Some(window) = app.get_webview_window("main") {
-                if let Ok(Some(monitor)) = window.primary_monitor() {
-                    let screen_size = monitor.size();
-                    let screen_pos = monitor.position();
-                    let win_width = 380u32;
-                    let win_height = screen_size.height;
+            // macOS Accessory policy: acts as menu bar / tray utility without polluting the Dock
+            #[cfg(target_os = "macos")]
+            {
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
 
-                    let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                        width: win_width,
-                        height: win_height,
-                    }));
-                    let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-                        x: screen_pos.x + screen_size.width as i32 - win_width as i32,
-                        y: screen_pos.y,
-                    }));
+            // Position and setup window
+            if let Some(window) = app.get_webview_window("main") {
+                position_sidebar(&window);
+            }
+
+            // Register global shortcuts gracefully
+            let global_shortcut = app.global_shortcut();
+            let candidate_shortcuts = ["Alt+Space", "CommandOrControl+Shift+T", "CommandOrControl+Alt+T"];
+            for raw_sc in candidate_shortcuts {
+                if let Ok(sc) = raw_sc.parse::<Shortcut>() {
+                    let _ = global_shortcut.register(sc);
                 }
             }
 
-            // Create System Tray
+            // Create System Tray with icon and menu
             let toggle_item = MenuItem::with_id(app, "toggle", "Toggle Tasksider", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Tasksider", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&toggle_item, &quit_item])?;
 
-            let _tray = TrayIconBuilder::new()
+            let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
-                .tooltip("Tasksider")
-                .show_menu_on_left_click(false)
+                .tooltip("Tasksider (Click or shortcut to toggle)")
+                .show_menu_on_left_click(false);
+
+            // Ensure tray has an icon
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            let _tray = tray_builder
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "toggle" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let is_vis = w.is_visible().unwrap_or(false);
-                            if is_vis {
-                                let _ = w.hide();
-                            } else {
-                                let _ = w.show().and_then(|_| w.set_focus());
-                            }
-                        }
+                        toggle_sidebar(app);
                     }
                     "quit" => {
                         app.exit(0);
@@ -156,15 +197,7 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let is_vis = w.is_visible().unwrap_or(false);
-                            if is_vis {
-                                let _ = w.hide();
-                            } else {
-                                let _ = w.show().and_then(|_| w.set_focus());
-                            }
-                        }
+                        toggle_sidebar(tray.app_handle());
                     }
                 })
                 .build(app)?;
