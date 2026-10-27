@@ -1,18 +1,28 @@
 import React, { useEffect } from "react";
 import { Theme } from "../themes";
+import { SyncStatus } from "../types";
 import { ThemeCombobox } from "./ThemeCombobox";
+import { CloudSyncSettings } from "./CloudSyncSettings";
 import { X, Sliders, Palette, Command, Radio, CheckCircle2 } from "lucide-react";
 
 interface SettingsDialogProps {
   currentTheme: Theme;
   onSelectTheme: (theme: Theme) => void;
   onClose: () => void;
+  syncStatus: SyncStatus;
+  onStartAuth: (clientId?: string) => Promise<void>;
+  onDisconnect: () => Promise<void>;
+  onSyncNow: () => Promise<void>;
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   currentTheme,
   onSelectTheme,
   onClose,
+  syncStatus,
+  onStartAuth,
+  onDisconnect,
+  onSyncNow,
 }) => {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -35,12 +45,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           borderColor: "var(--hairline-bright)",
           color: "var(--text)",
         }}
-        className="w-full max-w-sm rounded-2xl border shadow-2xl flex flex-col animate-in zoom-in-95 duration-150 relative"
+        className="w-full max-w-sm max-h-[88vh] rounded-2xl border shadow-2xl flex flex-col animate-in zoom-in-95 duration-150 relative overflow-hidden"
       >
         {/* Header */}
         <div
           style={{ borderColor: "var(--hairline)" }}
-          className="flex items-center justify-between px-4 py-3 border-b"
+          className="flex items-center justify-between px-4 py-3 border-b shrink-0"
         >
           <div className="flex items-center gap-2.5">
             <div
@@ -55,7 +65,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <div>
               <h2 className="font-semibold text-xs leading-tight">Preferences</h2>
               <p style={{ color: "var(--muted)" }} className="text-[10px]">
-                Theme & sidebar configuration
+                Theme, cloud sync & system configuration
               </p>
             </div>
           </div>
@@ -70,9 +80,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-3.5 flex flex-col gap-3.5 text-xs">
-          {/* Section: Theme / Appearance */}
+        {/* Content Body - Scrollable */}
+        <div className="p-3.5 flex flex-col gap-3.5 text-xs overflow-y-auto flex-1">
+          {/* Section 1: Theme / Appearance */}
           <div className="flex flex-col gap-2">
             <div
               className="flex items-center gap-1.5 font-medium text-[10px] uppercase tracking-wider"
@@ -93,7 +103,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             />
           </div>
 
-          {/* Section: Global Shortcuts */}
+          {/* Section 2: Google Drive Cloud Sync */}
+          <div
+            className="pt-2.5 border-t"
+            style={{ borderColor: "var(--hairline)" }}
+          >
+            <CloudSyncSettings
+              syncStatus={syncStatus}
+              onStartAuth={onStartAuth}
+              onDisconnect={onDisconnect}
+              onSyncNow={onSyncNow}
+            />
+          </div>
+
+          {/* Section 3: Global Shortcuts */}
           <div
             className="flex flex-col gap-2 pt-2.5 border-t"
             style={{ borderColor: "var(--hairline)" }}
@@ -170,7 +193,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             </div>
           </div>
 
-          {/* Section: Background Daemon */}
+          {/* Section 4: Background Daemon */}
           <div
             className="flex flex-col gap-2 pt-2.5 border-t"
             style={{ borderColor: "var(--hairline)" }}
@@ -208,7 +231,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             borderColor: "var(--hairline)",
             color: "var(--muted)",
           }}
-          className="px-4 py-2 border-t text-[10px] flex items-center justify-between"
+          className="px-4 py-2 border-t text-[10px] flex items-center justify-between shrink-0"
         >
           <span className="font-mono text-[9px] opacity-70">Tasksider v0.1.0</span>
           <button

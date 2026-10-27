@@ -29,6 +29,10 @@ export function App() {
     archiveTask,
     unarchiveTask,
     moveTask,
+    syncStatus,
+    startGoogleAuth,
+    disconnectGoogle,
+    syncNow,
   } = useTaskStore();
 
   const [theme, setTheme] = useState<Theme>(() => {
@@ -228,6 +232,10 @@ export function App() {
           currentTheme={theme}
           onSelectTheme={(selected) => setTheme(selected)}
           onClose={() => setSettingsOpen(false)}
+          syncStatus={syncStatus}
+          onStartAuth={startGoogleAuth}
+          onDisconnect={disconnectGoogle}
+          onSyncNow={syncNow}
         />
       )}
     </div>

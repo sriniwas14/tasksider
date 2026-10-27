@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { TaskItem, FlatRow, Priority, DropPosition, DragState } from "../types";
+import { TaskItem, FlatRow, Priority, DropPosition, DragState, SyncStatus } from "../types";
 
 // Tauri API dynamic check to allow development in browser as well
 let invoke: any = null;
@@ -24,6 +24,7 @@ function mk(title: string): TaskItem {
     expanded: true,
     archived: false,
     children: [],
+    updatedAt: Date.now(),
   };
 }
 
@@ -317,6 +318,7 @@ export function useTaskStore() {
     (id: string) => {
       function setDoneRecursive(t: TaskItem, v: boolean) {
         t.done = v;
+        t.updatedAt = Date.now();
         for (const c of t.children) setDoneRecursive(c, v);
       }
       updateTasks((list) => {
@@ -362,6 +364,7 @@ export function useTaskStore() {
         const r = findNode(id, list);
         if (r) {
           r.node.priority = priority;
+          r.node.updatedAt = Date.now();
         }
         return list;
       });
@@ -377,6 +380,7 @@ export function useTaskStore() {
         const r = findNode(id, list);
         if (r && r.node.title !== clean) {
           r.node.title = clean;
+          r.node.updatedAt = Date.now();
         }
         return list;
       });
@@ -401,6 +405,7 @@ export function useTaskStore() {
     (id: string) => {
       function setArchivedRecursive(t: TaskItem, v: boolean) {
         t.archived = v;
+        t.updatedAt = Date.now();
         for (const c of t.children) setArchivedRecursive(c, v);
       }
       updateTasks((list) => {
@@ -416,6 +421,7 @@ export function useTaskStore() {
     (id: string) => {
       function setArchivedRecursive(t: TaskItem, v: boolean) {
         t.archived = v;
+        t.updatedAt = Date.now();
         for (const c of t.children) setArchivedRecursive(c, v);
       }
       updateTasks((list) => {
@@ -459,6 +465,7 @@ export function useTaskStore() {
 
         if (targetId === "ROOT_END" || position === "root_bottom") {
           const [node] = src.list.splice(src.index, 1);
+          node.updatedAt = Date.now();
           list.push(node);
           success = true;
           return list;
@@ -468,6 +475,7 @@ export function useTaskStore() {
         if (!tgt) return list;
 
         const [node] = src.list.splice(src.index, 1);
+        node.updatedAt = Date.now();
 
         if (position === "inside") {
           tgt.node.children.push(node);
@@ -527,6 +535,93 @@ export function useTaskStore() {
     });
   }, []);
 
+  // --- Cloud Sync State & Operations ---
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    connected: false,
+    syncing: false,
+  });
+
+  const refreshSyncStatus = useCallback(async () => {
+    try {
+      if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
+        const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+        const status = await tauriInvoke<SyncStatus>("get_sync_status");
+        setSyncStatus(status);
+      }
+    } catch (e) {
+      console.warn("Could not fetch sync status", e);
+    }
+  }, []);
+
+  // Check sync status on mount
+  useEffect(() => {
+    refreshSyncStatus();
+  }, [refreshSyncStatus]);
+
+  const startGoogleAuth = useCallback(
+    async (clientId?: string) => {
+      setSyncStatus((prev) => ({ ...prev, syncing: true, error: undefined }));
+      try {
+        const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+        const status = await tauriInvoke<SyncStatus>("start_google_auth", {
+          clientId: clientId ? clientId.trim() : null,
+        });
+        setSyncStatus(status);
+
+        // Reload tasks after initial sync
+        const raw = await tauriInvoke<string>("load_tasks");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.tasks)) {
+            ensureArchived(parsed.tasks);
+            setTasks(parsed.tasks);
+          }
+        }
+      } catch (err: any) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          syncing: false,
+          error: typeof err === "string" ? err : err?.message || String(err),
+        }));
+        throw err;
+      }
+    },
+    []
+  );
+
+  const disconnectGoogle = useCallback(async () => {
+    try {
+      const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+      const status = await tauriInvoke<SyncStatus>("disconnect_google");
+      setSyncStatus(status);
+    } catch (e) {
+      console.warn("Could not disconnect Google", e);
+    }
+  }, []);
+
+  const syncNow = useCallback(async () => {
+    setSyncStatus((prev) => ({ ...prev, syncing: true, error: undefined }));
+    try {
+      const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+      const updatedJson = await tauriInvoke<string | null>("sync_tasks_now");
+      if (updatedJson) {
+        const parsed = JSON.parse(updatedJson);
+        if (parsed && Array.isArray(parsed.tasks)) {
+          ensureArchived(parsed.tasks);
+          setTasks(parsed.tasks);
+        }
+      }
+      await refreshSyncStatus();
+    } catch (err: any) {
+      setSyncStatus((prev) => ({
+        ...prev,
+        syncing: false,
+        error: typeof err === "string" ? err : err?.message || String(err),
+      }));
+      throw err;
+    }
+  }, [refreshSyncStatus]);
+
   return {
     tasks,
     rows,
@@ -551,5 +646,10 @@ export function useTaskStore() {
     unarchiveTask,
     moveTask,
     isDescendant,
+    syncStatus,
+    syncNow,
+    startGoogleAuth,
+    disconnectGoogle,
+    refreshSyncStatus,
   };
 }

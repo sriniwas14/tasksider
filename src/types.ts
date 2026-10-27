@@ -8,6 +8,16 @@ export interface TaskItem {
   expanded: boolean;
   archived: boolean;
   children: TaskItem[];
+  updatedAt?: number;
+  deleted?: boolean;
+}
+
+export interface SyncStatus {
+  connected: boolean;
+  email?: string;
+  lastSynced?: number;
+  syncing: boolean;
+  error?: string;
 }
 
 export interface FlatRow {

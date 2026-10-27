@@ -7,6 +7,10 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
+pub mod auth;
+pub mod drive;
+pub mod sync;
+
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
 #[cfg(target_os = "linux")]
@@ -95,15 +99,47 @@ fn load_tasks() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn save_tasks(data: String) -> Result<(), String> {
+async fn save_tasks(data: String) -> Result<(), String> {
     let path = get_tasks_path().ok_or_else(|| "Could not determine config directory".to_string())?;
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
-    fs::write(&path, data).map_err(|e| e.to_string())?;
+    fs::write(&path, &data).map_err(|e| e.to_string())?;
+
+    // Background push to Drive if signed in
+    if auth::load_auth_record().is_some() {
+        tauri::async_runtime::spawn(async {
+            let _ = sync::execute_sync().await;
+        });
+    }
+
     Ok(())
+}
+
+#[tauri::command]
+async fn start_google_auth(client_id: Option<String>) -> Result<sync::SyncStatus, String> {
+    auth::start_oauth_flow(client_id).await?;
+    // Trigger initial sync immediately after logging in
+    let _ = sync::execute_sync().await;
+    Ok(sync::get_current_sync_status())
+}
+
+#[tauri::command]
+fn disconnect_google() -> Result<sync::SyncStatus, String> {
+    auth::delete_auth_record()?;
+    Ok(sync::get_current_sync_status())
+}
+
+#[tauri::command]
+fn get_sync_status() -> Result<sync::SyncStatus, String> {
+    Ok(sync::get_current_sync_status())
+}
+
+#[tauri::command]
+async fn sync_tasks_now() -> Result<Option<String>, String> {
+    sync::execute_sync().await
 }
 
 #[tauri::command]
@@ -181,9 +217,19 @@ pub fn run() {
             save_tasks,
             toggle_window,
             hide_window,
-            quit_app
+            quit_app,
+            start_google_auth,
+            disconnect_google,
+            get_sync_status,
+            sync_tasks_now
         ])
         .setup(|app| {
+            // Background sync pull on launch if user is authenticated with Google Drive
+            if auth::load_auth_record().is_some() {
+                tauri::async_runtime::spawn(async {
+                    let _ = sync::execute_sync().await;
+                });
+            }
             // macOS Accessory policy: acts as menu bar / tray utility without polluting the Dock
             #[cfg(target_os = "macos")]
             {
