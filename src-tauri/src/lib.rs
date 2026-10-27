@@ -7,6 +7,11 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
+#[cfg(target_os = "linux")]
+use gtk::prelude::*;
+#[cfg(target_os = "linux")]
+use gtk_layer_shell::LayerShell;
+
 fn get_tasks_path() -> Option<PathBuf> {
     dirs::config_dir().map(|mut p| {
         p.push("tasksider");
@@ -47,7 +52,18 @@ pub fn toggle_sidebar(app: &tauri::AppHandle) {
         if is_visible {
             let _ = window.hide();
         } else {
+            #[cfg(not(target_os = "linux"))]
             position_sidebar(&window);
+
+            #[cfg(target_os = "linux")]
+            {
+                if !gtk_layer_shell::is_supported() {
+                    position_sidebar(&window);
+                } else if let Ok(gtk_window) = window.gtk_window() {
+                    gtk_window.show_all();
+                }
+            }
+
             let _ = window.show();
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -115,20 +131,43 @@ pub fn run() {
     let shortcut_builder = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(|app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                toggle_sidebar(app);
+                let app_handle = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    toggle_sidebar(&app_handle);
+                });
             }
         });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(shortcut_builder.build())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                position_sidebar(&window);
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            let app_handle = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if args.iter().any(|a| a == "--hide" || a == "hide") {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                } else if args.iter().any(|a| a == "--show" || a == "show") {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        #[cfg(not(target_os = "linux"))]
+                        position_sidebar(&window);
+
+                        #[cfg(target_os = "linux")]
+                        {
+                            if !gtk_layer_shell::is_supported() {
+                                position_sidebar(&window);
+                            }
+                        }
+
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
+                } else {
+                    toggle_sidebar(&app_handle);
+                }
+            });
         }))
         // Intercept close event: hide window instead of exiting process
         .on_window_event(|window, event| {
@@ -153,7 +192,40 @@ pub fn run() {
 
             // Position and setup window
             if let Some(window) = app.get_webview_window("main") {
-                position_sidebar(&window);
+                #[cfg(target_os = "linux")]
+                {
+                    if gtk_layer_shell::is_supported() {
+                        if let Ok(gtk_window) = window.gtk_window() {
+                            gtk_window.init_layer_shell();
+                            gtk_window.set_namespace("tasksider");
+                            gtk_window.set_layer(gtk_layer_shell::Layer::Top);
+                            gtk_window.set_anchor(gtk_layer_shell::Edge::Right, true);
+                            gtk_window.set_anchor(gtk_layer_shell::Edge::Top, true);
+                            gtk_window.set_anchor(gtk_layer_shell::Edge::Bottom, true);
+                            gtk_window.set_exclusive_zone(0);
+                            gtk_window.set_keyboard_mode(gtk_layer_shell::KeyboardMode::OnDemand);
+                            gtk_window.set_size_request(380, -1);
+                        }
+                    } else {
+                        position_sidebar(&window);
+                    }
+                }
+
+                #[cfg(not(target_os = "linux"))]
+                {
+                    position_sidebar(&window);
+                }
+
+                let start_hidden = std::env::args().any(|a| a == "--hide" || a == "--hidden");
+                if !start_hidden {
+                    #[cfg(target_os = "linux")]
+                    {
+                        if let Ok(gtk_window) = window.gtk_window() {
+                            gtk_window.show_all();
+                        }
+                    }
+                    let _ = window.show();
+                }
             }
 
             // Register global shortcuts gracefully
@@ -183,7 +255,10 @@ pub fn run() {
             let _tray = tray_builder
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "toggle" => {
-                        toggle_sidebar(app);
+                        let app_handle = app.clone();
+                        let _ = app.run_on_main_thread(move || {
+                            toggle_sidebar(&app_handle);
+                        });
                     }
                     "quit" => {
                         app.exit(0);
@@ -197,7 +272,10 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        toggle_sidebar(tray.app_handle());
+                        let app_handle = tray.app_handle().clone();
+                        let _ = app_handle.clone().run_on_main_thread(move || {
+                            toggle_sidebar(&app_handle);
+                        });
                     }
                 })
                 .build(app)?;
