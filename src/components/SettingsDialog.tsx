@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Theme, THEMES } from "../themes";
-import { X, Check, Palette, Search } from "lucide-react";
+import React, { useEffect } from "react";
+import { Theme } from "../themes";
+import { ThemeCombobox } from "./ThemeCombobox";
+import { X, Sliders, Palette, Command, Radio, CheckCircle2 } from "lucide-react";
 
 interface SettingsDialogProps {
   currentTheme: Theme;
@@ -13,10 +14,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onSelectTheme,
   onClose,
 }) => {
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<"all" | "dark" | "light">("all");
-  const modalRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -25,164 +22,187 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const filteredThemes = THEMES.filter((t) => {
-    const matchesCategory = category === "all" || t.category === category;
-    const matchesSearch =
-      !search.trim() ||
-      t.name.toLowerCase().includes(search.trim().toLowerCase()) ||
-      t.id.toLowerCase().includes(search.trim().toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Preferences"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+    >
       <div
-        ref={modalRef}
         style={{
           backgroundColor: "var(--card)",
           borderColor: "var(--hairline-bright)",
           color: "var(--text)",
         }}
-        className="w-full max-w-sm max-h-[85vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+        className="w-full max-w-sm rounded-2xl border shadow-2xl flex flex-col animate-in zoom-in-95 duration-150 relative"
       >
         {/* Header */}
         <div
           style={{ borderColor: "var(--hairline)" }}
           className="flex items-center justify-between px-4 py-3 border-b"
         >
-          <div className="flex items-center gap-2">
-            <Palette size={18} style={{ color: "var(--accent)" }} />
-            <span className="font-semibold text-sm">Theme Settings</span>
+          <div className="flex items-center gap-2.5">
+            <div
+              style={{
+                backgroundColor: "var(--accent-soft)",
+                color: "var(--accent)",
+              }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+            >
+              <Sliders size={15} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-xs leading-tight">Preferences</h2>
+              <p style={{ color: "var(--muted)" }} className="text-[10px]">
+                Theme & sidebar configuration
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             style={{ color: "var(--muted)" }}
-            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors"
-            title="Close"
+            className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors"
+            title="Close Settings (Esc)"
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
 
-        {/* Filter & Search Bar */}
-        <div className="p-3 flex flex-col gap-2">
-          {/* Search */}
-          <div className="relative">
-            <Search
-              size={14}
+        {/* Content Body */}
+        <div className="p-3.5 flex flex-col gap-3.5 text-xs">
+          {/* Section: Theme / Appearance */}
+          <div className="flex flex-col gap-2">
+            <div
+              className="flex items-center gap-1.5 font-medium text-[10px] uppercase tracking-wider"
               style={{ color: "var(--muted)" }}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2"
+            >
+              <Palette size={12} style={{ color: "var(--accent)" }} />
+              <span>Appearance</span>
+            </div>
+            <p
+              style={{ color: "var(--muted)" }}
+              className="text-[11px] -mt-1 leading-normal"
+            >
+              Select your color palette:
+            </p>
+            <ThemeCombobox
+              currentTheme={currentTheme}
+              onSelectTheme={onSelectTheme}
             />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search 20+ themes…"
+          </div>
+
+          {/* Section: Global Shortcuts */}
+          <div
+            className="flex flex-col gap-2 pt-2.5 border-t"
+            style={{ borderColor: "var(--hairline)" }}
+          >
+            <div
+              className="flex items-center gap-1.5 font-medium text-[10px] uppercase tracking-wider"
+              style={{ color: "var(--muted)" }}
+            >
+              <Command size={12} style={{ color: "var(--accent)" }} />
+              <span>Keyboard Shortcuts</span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div
+                style={{
+                  backgroundColor: "var(--input)",
+                  borderColor: "var(--hairline)",
+                }}
+                className="px-2.5 py-1.5 rounded-lg border flex items-center justify-between"
+              >
+                <span className="text-[11px]">Toggle Sidebar</span>
+                <div className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9px]">
+                    Alt
+                  </kbd>
+                  <span className="text-[9px]" style={{ color: "var(--muted)" }}>
+                    +
+                  </span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9px]">
+                    Space
+                  </kbd>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: "var(--input)",
+                  borderColor: "var(--hairline)",
+                }}
+                className="px-2.5 py-1.5 rounded-lg border flex items-center justify-between"
+              >
+                <span className="text-[11px]">Alternative Toggle</span>
+                <div className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9px]">
+                    Ctrl/Cmd
+                  </kbd>
+                  <span className="text-[9px]" style={{ color: "var(--muted)" }}>
+                    +
+                  </span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9px]">
+                    Shift
+                  </kbd>
+                  <span className="text-[9px]" style={{ color: "var(--muted)" }}>
+                    +
+                  </span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9px]">
+                    T
+                  </kbd>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: "var(--input)",
+                  borderColor: "var(--hairline)",
+                }}
+                className="px-2.5 py-1.5 rounded-lg border flex items-center justify-between"
+              >
+                <span className="text-[11px]">Hide / Close Modal</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9px]">
+                  Esc
+                </kbd>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Background Daemon */}
+          <div
+            className="flex flex-col gap-2 pt-2.5 border-t"
+            style={{ borderColor: "var(--hairline)" }}
+          >
+            <div
+              className="flex items-center gap-1.5 font-medium text-[10px] uppercase tracking-wider"
+              style={{ color: "var(--muted)" }}
+            >
+              <Radio size={12} style={{ color: "var(--accent)" }} />
+              <span>Background Daemon</span>
+            </div>
+            <div
               style={{
                 backgroundColor: "var(--input)",
                 borderColor: "var(--hairline)",
-                color: "var(--text)",
               }}
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-xl border focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--muted)]"
-            />
-          </div>
-
-          {/* Category Tabs */}
-          <div className="flex gap-1.5 p-0.5 rounded-xl bg-black/20">
-            {(["all", "dark", "light"] as const).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategory(cat)}
-                style={{
-                  backgroundColor:
-                    category === cat ? "var(--accent)" : "transparent",
-                  color:
-                    category === cat
-                      ? "var(--bg)"
-                      : "var(--muted)",
-                }}
-                className="flex-1 py-1 text-xs font-medium rounded-lg capitalize transition-all"
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Themes List / Grid */}
-        <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-1.5">
-          {filteredThemes.length === 0 ? (
-            <div
-              style={{ color: "var(--muted)" }}
-              className="py-8 text-center text-xs"
+              className="p-2.5 rounded-lg border flex items-start gap-2 text-[11px]"
             >
-              No themes found
+              <CheckCircle2
+                size={14}
+                className="shrink-0 mt-0.5"
+                style={{ color: "var(--accent)" }}
+              />
+              <span style={{ color: "var(--muted)" }} className="leading-snug">
+                Tasksider runs in the system tray. Closing the window or pressing
+                Escape minimizes it to the background for instant toggling.
+              </span>
             </div>
-          ) : (
-            filteredThemes.map((theme) => {
-              const isSelected = currentTheme.id === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => onSelectTheme(theme)}
-                  style={{
-                    backgroundColor: isSelected
-                      ? "var(--accent-soft)"
-                      : "var(--input)",
-                    borderColor: isSelected
-                      ? "var(--accent)"
-                      : "var(--hairline)",
-                  }}
-                  className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-3 text-left transition-all hover:border-[var(--accent)] ${
-                    isSelected ? "ring-1 ring-[var(--accent)]" : ""
-                  }`}
-                >
-                  {/* Theme Info */}
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        style={{ color: "var(--text)" }}
-                        className="text-xs font-semibold truncate"
-                      >
-                        {theme.name}
-                      </span>
-                      {isSelected && (
-                        <Check
-                          size={13}
-                          style={{ color: "var(--accent)" }}
-                          className="shrink-0 stroke-[3]"
-                        />
-                      )}
-                    </div>
-                    <span
-                      style={{ color: "var(--muted)" }}
-                      className="text-[10px] capitalize"
-                    >
-                      {theme.category} theme
-                    </span>
-                  </div>
-
-                  {/* 4-Color Swatch Preview */}
-                  <div className="flex items-center gap-1 p-1 rounded-lg bg-black/30 border border-white/5 shrink-0">
-                    {theme.preview.map((color, idx) => (
-                      <span
-                        key={idx}
-                        style={{ backgroundColor: color }}
-                        className="w-3.5 h-3.5 rounded-full border border-black/20"
-                        title={color}
-                      />
-                    ))}
-                  </div>
-                </button>
-              );
-            })
-          )}
+          </div>
         </div>
 
-        {/* Footer Hint */}
+        {/* Footer */}
         <div
           style={{
             borderColor: "var(--hairline)",
@@ -190,10 +210,18 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           }}
           className="px-4 py-2 border-t text-[10px] flex items-center justify-between"
         >
-          <span>Pick a theme to apply instantly</span>
-          <kbd className="px-1.5 py-0.5 rounded bg-black/30 border border-white/10 font-mono text-[9px]">
-            ESC
-          </kbd>
+          <span className="font-mono text-[9px] opacity-70">Tasksider v0.1.0</span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              backgroundColor: "var(--accent)",
+              color: "var(--bg)",
+            }}
+            className="px-3 py-1 rounded-lg font-semibold text-[11px] transition-opacity hover:opacity-90"
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>
