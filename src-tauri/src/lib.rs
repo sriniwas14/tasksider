@@ -32,11 +32,10 @@ fn get_legacy_taskside_path() -> Option<PathBuf> {
     })
 }
 
-fn position_sidebar(window: &tauri::WebviewWindow) {
+fn position_sidebar_with_width(window: &tauri::WebviewWindow, win_width: u32) {
     if let Ok(Some(monitor)) = window.primary_monitor() {
         let screen_size = monitor.size();
         let screen_pos = monitor.position();
-        let win_width = 380u32;
         let win_height = screen_size.height;
 
         let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
@@ -48,6 +47,10 @@ fn position_sidebar(window: &tauri::WebviewWindow) {
             y: screen_pos.y,
         }));
     }
+}
+
+fn position_sidebar(window: &tauri::WebviewWindow) {
+    position_sidebar_with_width(window, 380);
 }
 
 pub fn toggle_sidebar(app: &tauri::AppHandle) {
@@ -162,6 +165,29 @@ fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn set_sidebar_width(app: tauri::AppHandle, width: u32) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        #[cfg(target_os = "linux")]
+        {
+            if gtk_layer_shell::is_supported() {
+                if let Ok(gtk_window) = window.gtk_window() {
+                    gtk_window.set_size_request(width as i32, -1);
+                    gtk_window.queue_resize();
+                }
+            } else {
+                position_sidebar_with_width(&window, width);
+            }
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            position_sidebar_with_width(&window, width);
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let shortcut_builder = tauri_plugin_global_shortcut::Builder::new()
@@ -221,7 +247,8 @@ pub fn run() {
             start_google_auth,
             disconnect_google,
             get_sync_status,
-            sync_tasks_now
+            sync_tasks_now,
+            set_sidebar_width
         ])
         .setup(|app| {
             // Background sync pull on launch if user is authenticated with Google Drive

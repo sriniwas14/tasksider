@@ -3,6 +3,7 @@ import { Theme } from "../themes";
 import { SyncStatus } from "../types";
 import { ThemeCombobox } from "./ThemeCombobox";
 import { CloudSyncSettings } from "./CloudSyncSettings";
+import { TypographySettings } from "./TypographySettings";
 import { X, Sliders, Palette, Command, Radio, CheckCircle2 } from "lucide-react";
 
 interface SettingsDialogProps {
@@ -13,6 +14,14 @@ interface SettingsDialogProps {
   onStartAuth: (clientId?: string) => Promise<void>;
   onDisconnect: () => Promise<void>;
   onSyncNow: () => Promise<void>;
+  fontId: string;
+  onChangeFont: (id: string) => void;
+  fontSizeId: string;
+  onChangeFontSize: (id: string) => void;
+  customFont: string;
+  onChangeCustomFont: (font: string) => void;
+  sidebarWidth: number;
+  onChangeSidebarWidth: (width: number) => void;
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
@@ -23,6 +32,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onStartAuth,
   onDisconnect,
   onSyncNow,
+  fontId,
+  onChangeFont,
+  fontSizeId,
+  onChangeFontSize,
+  customFont,
+  onChangeCustomFont,
+  sidebarWidth,
+  onChangeSidebarWidth,
 }) => {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -65,7 +82,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <div>
               <h2 className="font-semibold text-xs leading-tight">Preferences</h2>
               <p style={{ color: "var(--muted)" }} className="text-[10px]">
-                Theme, cloud sync & system configuration
+                Theme, fonts, cloud sync & shortcuts
               </p>
             </div>
           </div>
@@ -82,14 +99,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
         {/* Content Body - Scrollable */}
         <div className="p-3.5 flex flex-col gap-3.5 text-xs overflow-y-auto flex-1">
-          {/* Section 1: Theme / Appearance */}
+          {/* Section 1: Appearance & Theme */}
           <div className="flex flex-col gap-2">
             <div
               className="flex items-center gap-1.5 font-medium text-[10px] uppercase tracking-wider"
               style={{ color: "var(--muted)" }}
             >
               <Palette size={12} style={{ color: "var(--accent)" }} />
-              <span>Appearance</span>
+              <span>Theme & Palette</span>
             </div>
             <p
               style={{ color: "var(--muted)" }}
@@ -103,7 +120,24 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             />
           </div>
 
-          {/* Section 2: Google Drive Cloud Sync */}
+          {/* Section 2: Typography & Sizing */}
+          <div
+            className="pt-2.5 border-t"
+            style={{ borderColor: "var(--hairline)" }}
+          >
+            <TypographySettings
+              fontId={fontId}
+              onChangeFont={onChangeFont}
+              fontSizeId={fontSizeId}
+              onChangeFontSize={onChangeFontSize}
+              customFont={customFont}
+              onChangeCustomFont={onChangeCustomFont}
+              sidebarWidth={sidebarWidth}
+              onChangeSidebarWidth={onChangeSidebarWidth}
+            />
+          </div>
+
+          {/* Section 3: Google Drive Cloud Sync */}
           <div
             className="pt-2.5 border-t"
             style={{ borderColor: "var(--hairline)" }}
@@ -116,7 +150,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             />
           </div>
 
-          {/* Section 3: Global Shortcuts */}
+          {/* Section 4: Global Shortcuts */}
           <div
             className="flex flex-col gap-2 pt-2.5 border-t"
             style={{ borderColor: "var(--hairline)" }}
@@ -193,7 +227,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             </div>
           </div>
 
-          {/* Section 4: Background Daemon */}
+          {/* Section 5: Background Daemon */}
           <div
             className="flex flex-col gap-2 pt-2.5 border-t"
             style={{ borderColor: "var(--hairline)" }}

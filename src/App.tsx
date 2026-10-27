@@ -1,10 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTaskStore } from "./store/taskStore";
 import { Header } from "./components/Header";
 import { TaskTree } from "./components/TaskTree";
 import { PriorityMenu } from "./components/PriorityMenu";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Theme, getTheme, applyTheme, DEFAULT_THEME_ID } from "./themes";
+import {
+  DEFAULT_FONT_ID,
+  DEFAULT_FONT_SIZE_ID,
+  getFont,
+  getFontSize,
+  applyTypography,
+} from "./fonts";
 import { Priority } from "./types";
 import { Plus } from "lucide-react";
 
@@ -39,6 +46,20 @@ export function App() {
     const saved = localStorage.getItem("tasksider_theme");
     return getTheme(saved || DEFAULT_THEME_ID);
   });
+  const [fontId, setFontId] = useState<string>(() => {
+    return localStorage.getItem("tasksider_font_id") || DEFAULT_FONT_ID;
+  });
+  const [fontSizeId, setFontSizeId] = useState<string>(() => {
+    return localStorage.getItem("tasksider_font_size_id") || DEFAULT_FONT_SIZE_ID;
+  });
+  const [customFont, setCustomFont] = useState<string>(() => {
+    return localStorage.getItem("tasksider_custom_font") || "";
+  });
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("tasksider_sidebar_width");
+    return saved ? Number(saved) : 380;
+  });
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inlineFor, setInlineFor] = useState<string>("");
   const [newRootTitle, setNewRootTitle] = useState("");
@@ -61,6 +82,73 @@ export function App() {
     applyTheme(theme);
     localStorage.setItem("tasksider_theme", theme.id);
   }, [theme]);
+
+  // Apply typography (Font & Font Size) & persist
+  useEffect(() => {
+    const selectedFont = customFont ? customFont : getFont(fontId).fontFamily;
+    const selectedSize = getFontSize(fontSizeId).size;
+    applyTypography(selectedFont, selectedSize);
+    localStorage.setItem("tasksider_font_id", fontId);
+    localStorage.setItem("tasksider_font_size_id", fontSizeId);
+    if (customFont) {
+      localStorage.setItem("tasksider_custom_font", customFont);
+    } else {
+      localStorage.removeItem("tasksider_custom_font");
+    }
+  }, [fontId, fontSizeId, customFont]);
+
+  // Update sidebar width in backend and persist
+  const updateSidebarWidth = useCallback(async (width: number) => {
+    const clamped = Math.round(Math.min(Math.max(280, width), 850));
+    setSidebarWidth(clamped);
+    localStorage.setItem("tasksider_sidebar_width", String(clamped));
+    try {
+      if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("set_sidebar_width", { width: clamped });
+      }
+    } catch (e) {
+      console.warn("Could not set sidebar width:", e);
+    }
+  }, []);
+
+  // Restore saved width on initial mount
+  useEffect(() => {
+    const saved = Number(localStorage.getItem("tasksider_sidebar_width")) || 380;
+    if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("set_sidebar_width", { width: saved });
+      });
+    }
+  }, []);
+
+  // Interactive Drag-to-Resize on the left border
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      // Sidebar is anchored to right screen edge: moving mouse left increases width
+      const delta = startX - moveEvent.clientX;
+      const newWidth = Math.round(Math.min(Math.max(280, startWidth + delta), 850));
+      setSidebarWidth(newWidth);
+      if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
+        import("@tauri-apps/api/core").then(({ invoke }) => {
+          invoke("set_sidebar_width", { width: newWidth });
+        });
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      localStorage.setItem("tasksider_sidebar_width", String(sidebarWidth));
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
 
   // Global keyboard shortcuts (Escape cancels drag / closes modals)
   useEffect(() => {
@@ -119,9 +207,20 @@ export function App() {
         background: `linear-gradient(to bottom, var(--bg-top), var(--bg))`,
         color: "var(--text)",
         borderLeftColor: "var(--hairline-bright)",
+        fontFamily: "var(--app-font-family)",
+        fontSize: "var(--app-font-size)",
       }}
       className="relative w-full h-screen flex flex-col border-l shadow-2xl overflow-hidden select-none transition-colors duration-200"
     >
+      {/* Interactive Left-Border Drag-to-Resize Handle */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="absolute left-0 top-0 bottom-0 w-2.5 cursor-col-resize z-40 group select-none hover:bg-[var(--accent)]/15 transition-colors"
+        title="Drag left edge to resize sidebar"
+      >
+        <div className="w-0.5 h-full bg-transparent group-hover:bg-[var(--accent)] transition-colors mx-auto" />
+      </div>
+
       {/* Accent edge glow on the left border */}
       <div
         style={{ backgroundColor: "var(--accent)" }}
@@ -236,6 +335,14 @@ export function App() {
           onStartAuth={startGoogleAuth}
           onDisconnect={disconnectGoogle}
           onSyncNow={syncNow}
+          fontId={fontId}
+          onChangeFont={setFontId}
+          fontSizeId={fontSizeId}
+          onChangeFontSize={setFontSizeId}
+          customFont={customFont}
+          onChangeCustomFont={setCustomFont}
+          sidebarWidth={sidebarWidth}
+          onChangeSidebarWidth={updateSidebarWidth}
         />
       )}
     </div>
