@@ -53,8 +53,14 @@ export const PriorityMenu: React.FC<PriorityMenuProps> = ({
   return (
     <div
       ref={menuRef}
-      style={{ left: `${adjustedX}px`, top: `${adjustedY}px` }}
-      className="fixed z-50 w-44 rounded-xl bg-[#20202f] border border-[rgba(255,255,255,0.12)] shadow-2xl py-1 text-xs text-[#e6e9f5] backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+      style={{
+        left: `${adjustedX}px`,
+        top: `${adjustedY}px`,
+        backgroundColor: "var(--card)",
+        borderColor: "var(--hairline-bright)",
+        color: "var(--text)",
+      }}
+      className="fixed z-50 w-44 rounded-xl border shadow-2xl py-1 text-xs backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
     >
       <button
         type="button"
@@ -64,11 +70,11 @@ export const PriorityMenu: React.FC<PriorityMenuProps> = ({
         }}
         className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-white/10 transition-colors text-left"
       >
-        <Plus size={14} className="text-[#89b4fa]" />
+        <Plus size={14} style={{ color: "var(--accent)" }} />
         <span>Add subtask</span>
       </button>
 
-      <div className="my-1 border-t border-[rgba(255,255,255,0.08)]" />
+      <div style={{ borderColor: "var(--hairline)" }} className="my-1 border-t" />
 
       {([0, 1, 2, 3] as Priority[]).map((p) => {
         const labels = ["P0 · Critical", "P1 · High", "P2 · Normal", "P3 · None"];
@@ -91,7 +97,7 @@ export const PriorityMenu: React.FC<PriorityMenuProps> = ({
         );
       })}
 
-      <div className="my-1 border-t border-[rgba(255,255,255,0.08)]" />
+      <div style={{ borderColor: "var(--hairline)" }} className="my-1 border-t" />
 
       {isArchived ? (
         <button
@@ -100,7 +106,8 @@ export const PriorityMenu: React.FC<PriorityMenuProps> = ({
             onUnarchive(taskId);
             onClose();
           }}
-          className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-white/10 transition-colors text-left text-[#8a8fa8] hover:text-[#e6e9f5]"
+          style={{ color: "var(--muted)" }}
+          className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-white/10 hover:text-[var(--text)] transition-colors text-left"
         >
           <ArchiveRestore size={14} />
           <span>Unarchive</span>
@@ -112,7 +119,8 @@ export const PriorityMenu: React.FC<PriorityMenuProps> = ({
             onArchive(taskId);
             onClose();
           }}
-          className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-white/10 transition-colors text-left text-[#8a8fa8] hover:text-[#e6e9f5]"
+          style={{ color: "var(--muted)" }}
+          className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-white/10 hover:text-[var(--text)] transition-colors text-left"
         >
           <Archive size={14} />
           <span>Archive</span>

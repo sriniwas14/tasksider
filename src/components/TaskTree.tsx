@@ -65,7 +65,6 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
   }
 
   function handleDragLeave(_e: React.DragEvent, targetId: string) {
-    // Only reset if exiting current target
     if (dragState.targetId === targetId) {
       onUpdateDragTarget("", "");
     }
@@ -98,7 +97,10 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
   return (
     <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-2">
       {rows.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-[#8a8fa8]">
+        <div
+          style={{ color: "var(--muted)" }}
+          className="flex-1 flex flex-col items-center justify-center text-center p-8"
+        >
           <span className="text-sm">No tasks found</span>
           <span className="text-xs opacity-60 mt-1">Add a task below to get started</span>
         </div>
@@ -137,7 +139,7 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
                   style={{ paddingLeft: `${(row.depth + 1) * 18}px` }}
                   className="flex items-center gap-2 py-1 animate-in fade-in duration-100"
                 >
-                  <CornerDownRight size={14} className="text-[#89b4fa] shrink-0" />
+                  <CornerDownRight size={14} style={{ color: "var(--accent)" }} className="shrink-0" />
                   <input
                     autoFocus
                     type="text"
@@ -149,7 +151,12 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
                     }}
                     onBlur={() => handleCommitSubtask(row.id)}
                     placeholder="New subtask… (Enter to save)"
-                    className="flex-1 bg-[#20202f] text-sm text-[#e6e9f5] px-2.5 py-1.5 rounded-xl border border-[#89b4fa] focus:outline-none placeholder-[#8a8fa8]"
+                    style={{
+                      backgroundColor: "var(--input)",
+                      borderColor: "var(--accent)",
+                      color: "var(--text)",
+                    }}
+                    className="flex-1 text-sm px-2.5 py-1.5 rounded-xl border focus:outline-none placeholder:text-[var(--muted)]"
                   />
                 </div>
               )}
@@ -169,11 +176,21 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
             if (dragState.targetId === "ROOT_END") onUpdateDragTarget("", "");
           }}
           onDrop={handleFooterDrop}
-          className={`w-full py-2.5 px-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all ${
-            dragState.targetId === "ROOT_END"
-              ? "border-[#89b4fa] bg-[rgba(137,180,250,0.16)] text-[#89b4fa]"
-              : "border-[rgba(255,255,255,0.1)] text-[#8a8fa8]"
-          }`}
+          style={{
+            borderColor:
+              dragState.targetId === "ROOT_END"
+                ? "var(--accent)"
+                : "var(--hairline)",
+            backgroundColor:
+              dragState.targetId === "ROOT_END"
+                ? "var(--accent-soft)"
+                : "transparent",
+            color:
+              dragState.targetId === "ROOT_END"
+                ? "var(--accent)"
+                : "var(--muted)",
+          }}
+          className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
         >
           <span className="text-sm font-semibold">↓</span>
           <span className="text-xs font-medium">Drop here to move to the end</span>

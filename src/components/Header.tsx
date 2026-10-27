@@ -1,10 +1,11 @@
 import React from "react";
-import { X, Search } from "lucide-react";
+import { X, Search, Settings } from "lucide-react";
 
 interface HeaderProps {
   openCount: number;
   query: string;
   onQueryChange: (q: string) => void;
+  onOpenSettings: () => void;
   onClose: () => void;
 }
 
@@ -12,6 +13,7 @@ export const Header: React.FC<HeaderProps> = ({
   openCount,
   query,
   onQueryChange,
+  onOpenSettings,
   onClose,
 }) => {
   const formattedDate = new Date().toLocaleDateString(undefined, {
@@ -22,28 +24,54 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <div className="flex flex-col gap-3 px-4 pt-4 pb-1">
-      {/* Top row: Title, Date, Pill, Close */}
+      {/* Top row: Title, Date, Pill, Settings Cog, Close */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
-          <span className="text-xl font-semibold tracking-tight text-[#e6e9f5]">
+          <span
+            style={{ color: "var(--text)" }}
+            className="text-xl font-semibold tracking-tight"
+          >
             Tasksider
           </span>
-          <span className="text-xs text-[#8a8fa8]">{formattedDate}</span>
+          <span style={{ color: "var(--muted)" }} className="text-xs">
+            {formattedDate}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {/* Open count pill */}
-          <div className="px-2.5 py-0.5 rounded-full bg-[rgba(137,180,250,0.14)] border border-[rgba(137,180,250,0.35)]">
-            <span className="text-xs font-semibold text-[#89b4fa]">
+          <div
+            style={{
+              backgroundColor: "var(--accent-soft)",
+              borderColor: "var(--hairline-bright)",
+            }}
+            className="px-2.5 py-0.5 rounded-full border"
+          >
+            <span
+              style={{ color: "var(--accent)" }}
+              className="text-xs font-semibold"
+            >
               {openCount} open
             </span>
           </div>
+
+          {/* Settings cog button */}
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            style={{ color: "var(--muted)" }}
+            className="w-7 h-7 rounded-full flex items-center justify-center hover:text-[var(--text)] hover:bg-white/10 transition-colors"
+            title="Theme Settings"
+          >
+            <Settings size={15} />
+          </button>
 
           {/* Close button */}
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[#8a8fa8] hover:text-[#e6e9f5] hover:bg-white/10 transition-colors"
+            style={{ color: "var(--muted)" }}
+            className="w-7 h-7 rounded-full flex items-center justify-center hover:text-[var(--text)] hover:bg-white/10 transition-colors"
             title="Close sidebar"
           >
             <X size={16} />
@@ -55,20 +83,27 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="relative w-full">
         <Search
           size={15}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a8fa8]"
+          style={{ color: "var(--muted)" }}
+          className="absolute left-3 top-1/2 -translate-y-1/2"
         />
         <input
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search tasks…"
-          className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#20202f] border border-[rgba(255,255,255,0.08)] text-sm text-[#e6e9f5] placeholder-[#8a8fa8] focus:outline-none focus:border-[#89b4fa] transition-colors"
+          style={{
+            backgroundColor: "var(--input)",
+            borderColor: "var(--hairline)",
+            color: "var(--text)",
+          }}
+          className="w-full h-9 pl-9 pr-7 rounded-xl border text-sm placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
         />
         {query && (
           <button
             type="button"
             onClick={() => onQueryChange("")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#8a8fa8] hover:text-white"
+            style={{ color: "var(--muted)" }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs hover:text-white"
           >
             ×
           </button>
