@@ -1,6 +1,17 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FlatRow, PRIO_COLORS, PRIO_LABELS, Priority } from "../types";
-import { ChevronRight, ChevronDown, Check, GripVertical, Plus, MoreHorizontal } from "lucide-react";
+import { FlatRow, PRIO_COLORS, PRIO_LABELS, Priority, formatDuration } from "../types";
+import {
+  ChevronRight,
+  ChevronDown,
+  Check,
+  GripVertical,
+  Plus,
+  MoreHorizontal,
+  Calendar as CalendarIcon,
+  Play,
+  Square,
+  Timer as TimerIcon,
+} from "lucide-react";
 
 interface TaskCardProps {
   row: FlatRow;
@@ -8,15 +19,65 @@ interface TaskCardProps {
   dropBefore: boolean;
   dropAfter: boolean;
   dropInside: boolean;
+  isActive?: boolean;
+  activeElapsed?: number;
   onToggleDone: (id: string) => void;
   onToggleExpanded: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onAddSubtask: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, id: string, archived: boolean) => void;
+  onOpenDatePicker?: (e: React.MouseEvent, id: string, currentDate?: string) => void;
+  onOpenDurationMenu?: (e: React.MouseEvent, id: string, currentDuration?: number) => void;
+  onStartTimer: (id: string) => void;
+  onStopTimer: () => void;
   onDragStart: (e: React.DragEvent, id: string, title: string, priority: Priority) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
   onDragLeave: (e: React.DragEvent, id: string) => void;
   onDrop: (e: React.DragEvent, id: string) => void;
+}
+
+function formatTimerSeconds(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const sStr = String(s).padStart(2, "0");
+  if (m < 60) {
+    return `${m}:${sStr}`;
+  }
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return `${h}:${String(remM).padStart(2, "0")}:${sStr}`;
+}
+
+function formatTaskDueDate(dateStr: string): { label: string; isToday: boolean; isPast: boolean; isTomorrow: boolean } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const today = `${year}-${month}-${day}`;
+
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  const tomorrow = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+
+  if (dateStr === today) {
+    return { label: "Today", isToday: true, isPast: false, isTomorrow: false };
+  }
+  if (dateStr === tomorrow) {
+    return { label: "Tomorrow", isToday: false, isPast: false, isTomorrow: true };
+  }
+
+  const isPast = dateStr < today;
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length === 3) {
+    const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
+    const label = dObj.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: dObj.getFullYear() !== year ? "numeric" : undefined,
+    });
+    return { label, isToday: false, isPast, isTomorrow: false };
+  }
+  return { label: dateStr, isToday: false, isPast, isTomorrow: false };
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -25,11 +86,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   dropBefore,
   dropAfter,
   dropInside,
+  isActive = false,
+  activeElapsed = 0,
   onToggleDone,
   onToggleExpanded,
   onRename,
   onAddSubtask,
   onContextMenu,
+  onOpenDatePicker,
+  onOpenDurationMenu,
+  onStartTimer,
+  onStopTimer,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -94,17 +161,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         style={{
           borderColor: dropInside
             ? "var(--accent)"
+            : isActive
+            ? "var(--accent)"
             : isMuted
             ? "var(--hairline)"
             : `${pColor}70`,
           backgroundColor: dropInside
+            ? "var(--accent-soft)"
+            : isActive
             ? "var(--accent-soft)"
             : isMuted
             ? "var(--hairline)"
             : `${pColor}20`,
         }}
         className={`group relative flex items-center gap-2 px-2.5 py-2 rounded-xl border transition-all duration-150 select-none ${
-          dropInside ? "ring-2 ring-[var(--accent)]" : "hover:border-opacity-100"
+          dropInside
+            ? "ring-2 ring-[var(--accent)]"
+            : isActive
+            ? "ring-2 ring-[var(--accent)] shadow-[0_0_14px_var(--accent-soft)]"
+            : "hover:border-opacity-100"
         }`}
       >
         {/* Drag handle */}
@@ -154,6 +229,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
         </button>
 
+        {/* Play / Stop Timer Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isActive) {
+              onStopTimer();
+            } else {
+              onStartTimer(row.id);
+            }
+          }}
+          style={{
+            color: isActive ? "var(--accent)" : "var(--muted)",
+            backgroundColor: isActive ? "var(--accent-soft)" : "transparent",
+            borderColor: isActive ? "var(--accent)" : "transparent",
+          }}
+          className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 hover:text-[var(--accent)] hover:bg-white/10 ${
+            isActive ? "border shadow-sm ring-1 ring-[var(--accent)]" : ""
+          }`}
+          title={isActive ? "Stop timer" : "Start timer"}
+        >
+          {isActive ? (
+            <Square size={9} className="fill-current animate-pulse text-[var(--accent)]" />
+          ) : (
+            <Play size={10} className="fill-current ml-0.5 opacity-60 group-hover:opacity-100" />
+          )}
+        </button>
+
         {/* Task Title / Edit Input */}
         <div className="flex-1 min-w-0">
           {editing ? (
@@ -186,6 +289,85 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </span>
           )}
         </div>
+
+        {/* Active Timer Display (if running) */}
+        {isActive && (
+          <div
+            style={{
+              backgroundColor: "var(--accent)",
+              color: "var(--bg)",
+            }}
+            className="px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm shrink-0 tracking-tight"
+            title="Timer running"
+          >
+            <TimerIcon size={10} className="animate-spin" />
+            <span>
+              {formatTimerSeconds(activeElapsed)}
+              {row.duration ? ` / ${formatDuration(row.duration)}` : ""}
+            </span>
+          </div>
+        )}
+
+        {/* Duration Badge (when not running and duration is set) */}
+        {!isActive && !!row.duration && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDurationMenu?.(e, row.id, row.duration);
+            }}
+            style={{
+              backgroundColor: "var(--input)",
+              borderColor: "var(--hairline)",
+              color: "var(--muted)",
+            }}
+            className="px-1.5 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 hover:border-[var(--accent)] hover:text-[var(--text)] transition-all shrink-0 cursor-pointer"
+            title={`Duration: ${formatDuration(row.duration)}. Click to change.`}
+          >
+            <TimerIcon size={10} style={{ color: "var(--accent)" }} />
+            <span>{formatDuration(row.duration)}</span>
+          </button>
+        )}
+
+        {/* Date Badge (if scheduled) */}
+        {row.dueDate && (() => {
+          const { label, isToday, isPast, isTomorrow } = formatTaskDueDate(row.dueDate);
+          const isOverdue = isPast && !row.done;
+
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDatePicker?.(e, row.id, row.dueDate);
+              }}
+              style={{
+                backgroundColor: isOverdue
+                  ? "rgba(239, 68, 68, 0.15)"
+                  : isToday
+                  ? "var(--accent-soft)"
+                  : "var(--input)",
+                borderColor: isOverdue
+                  ? "rgba(239, 68, 68, 0.4)"
+                  : isToday
+                  ? "var(--accent)"
+                  : "var(--hairline)",
+                color: isOverdue
+                  ? "#f87171"
+                  : isToday
+                  ? "var(--accent)"
+                  : isTomorrow
+                  ? "var(--text)"
+                  : "var(--muted)",
+              }}
+              className="px-1.5 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 hover:border-[var(--accent)] transition-all shrink-0 cursor-pointer"
+              title={`Scheduled for ${label}. Click to change date.`}
+            >
+              <CalendarIcon size={10} />
+              <span>{label}</span>
+            </button>
+          );
+        })()}
 
         {/* Priority Badge */}
         <div

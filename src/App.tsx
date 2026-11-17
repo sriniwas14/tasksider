@@ -3,6 +3,7 @@ import { useTaskStore } from "./store/taskStore";
 import { Header } from "./components/Header";
 import { TaskTree } from "./components/TaskTree";
 import { PriorityMenu } from "./components/PriorityMenu";
+import { CalendarPicker } from "./components/CalendarPicker";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Theme, getTheme, applyTheme, DEFAULT_THEME_ID } from "./themes";
 import {
@@ -19,10 +20,18 @@ export function App() {
   const {
     rows,
     openCount,
+    futureCount,
     query,
     setQuery,
     showArchived,
     setShowArchived,
+    showFutureTasks,
+    setShowFutureTasks,
+    activeTaskId,
+    activeElapsed,
+    startTimer,
+    stopTimer,
+    setDuration,
     dragState,
     startDrag,
     updateDragTarget,
@@ -31,14 +40,15 @@ export function App() {
     toggleDone,
     toggleExpanded,
     setPriority,
+    setDueDate,
     renameTask,
     removeTask,
     archiveTask,
     unarchiveTask,
     moveTask,
     syncStatus,
-    startGoogleAuth,
-    disconnectGoogle,
+    connectFirebase,
+    disconnectFirebase,
     syncNow,
   } = useTaskStore();
 
@@ -75,6 +85,19 @@ export function App() {
     y: 0,
     taskId: "",
     isArchived: false,
+  });
+  const [datePicker, setDatePicker] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    taskId: string;
+    currentDate?: string;
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    taskId: "",
+    currentDate: undefined,
   });
 
   // Apply theme dynamically to CSS variables & persist
@@ -156,6 +179,8 @@ export function App() {
       if (e.key === "Escape") {
         if (settingsOpen) {
           setSettingsOpen(false);
+        } else if (datePicker.visible) {
+          setDatePicker((prev) => ({ ...prev, visible: false }));
         } else if (dragState.taskId) {
           cancelDrag();
         } else if (contextMenu.visible) {
@@ -169,7 +194,7 @@ export function App() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [settingsOpen, dragState.taskId, contextMenu.visible, inlineFor, cancelDrag]);
+  }, [settingsOpen, datePicker.visible, dragState.taskId, contextMenu.visible, inlineFor, cancelDrag]);
 
   async function handleCloseWindow() {
     try {
@@ -230,8 +255,11 @@ export function App() {
       {/* Header with Search, Open Count, and Cog */}
       <Header
         openCount={openCount}
+        futureCount={futureCount}
         query={query}
         onQueryChange={setQuery}
+        showFutureTasks={showFutureTasks}
+        onToggleShowFutureTasks={() => setShowFutureTasks((prev) => !prev)}
         onOpenSettings={() => setSettingsOpen(true)}
         onClose={handleCloseWindow}
       />
@@ -241,12 +269,29 @@ export function App() {
         rows={rows}
         dragState={dragState}
         inlineFor={inlineFor}
+        activeTaskId={activeTaskId}
+        activeElapsed={activeElapsed}
         onSetInlineFor={setInlineFor}
         onToggleDone={toggleDone}
         onToggleExpanded={toggleExpanded}
         onRename={renameTask}
         onAddSubtask={(title, parentId) => addTask(title, parentId)}
         onContextMenu={handleContextMenu}
+        onOpenDatePicker={(e, id, currentDate) => {
+          setDatePicker({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            taskId: id,
+            currentDate,
+          });
+        }}
+        onOpenDurationMenu={(e, id) => {
+          const row = rows.find((r) => r.id === id);
+          handleContextMenu(e, id, row?.archived || false);
+        }}
+        onStartTimer={startTimer}
+        onStopTimer={stopTimer}
         onStartDrag={startDrag}
         onUpdateDragTarget={updateDragTarget}
         onMoveTask={moveTask}
@@ -314,14 +359,39 @@ export function App() {
           y={contextMenu.y}
           taskId={contextMenu.taskId}
           isArchived={contextMenu.isArchived}
+          currentDuration={rows.find((r) => r.id === contextMenu.taskId)?.duration}
           onClose={() => setContextMenu((prev) => ({ ...prev, visible: false }))}
           onAddSubtask={(id) => {
             setInlineFor(id);
           }}
+          onOpenDatePicker={(id, x, y) => {
+            const row = rows.find((r) => r.id === id);
+            setDatePicker({
+              visible: true,
+              x,
+              y,
+              taskId: id,
+              currentDate: row?.dueDate,
+            });
+          }}
+          onSetDuration={(id, minutes) => setDuration(id, minutes)}
           onSetPriority={(id, p: Priority) => setPriority(id, p)}
           onArchive={(id) => archiveTask(id)}
           onUnarchive={(id) => unarchiveTask(id)}
           onDelete={(id) => removeTask(id)}
+        />
+      )}
+
+      {/* Calendar Date Picker Popover */}
+      {datePicker.visible && (
+        <CalendarPicker
+          x={datePicker.x}
+          y={datePicker.y}
+          currentDate={datePicker.currentDate}
+          onSelectDate={(date) => {
+            setDueDate(datePicker.taskId, date);
+          }}
+          onClose={() => setDatePicker((prev) => ({ ...prev, visible: false }))}
         />
       )}
 
@@ -332,8 +402,8 @@ export function App() {
           onSelectTheme={(selected) => setTheme(selected)}
           onClose={() => setSettingsOpen(false)}
           syncStatus={syncStatus}
-          onStartAuth={startGoogleAuth}
-          onDisconnect={disconnectGoogle}
+          onConnectFirebase={connectFirebase}
+          onDisconnectFirebase={disconnectFirebase}
           onSyncNow={syncNow}
           fontId={fontId}
           onChangeFont={setFontId}

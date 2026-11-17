@@ -97,6 +97,64 @@ export function useTaskStore() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showFutureTasks, setShowFutureTasksState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("tasksider_show_future") === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+
+  const setShowFutureTasks = useCallback(
+    (valueOrUpdater: boolean | ((prev: boolean) => boolean)) => {
+      setShowFutureTasksState((prev) => {
+        const next =
+          typeof valueOrUpdater === "function" ? valueOrUpdater(prev) : valueOrUpdater;
+        try {
+          localStorage.setItem("tasksider_show_future", String(next));
+        } catch (_) {}
+        return next;
+      });
+    },
+    []
+  );
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("tasksider_active_task_id") || null;
+    } catch (_) {
+      return null;
+    }
+  });
+
+  const [activeTimerStart, setActiveTimerStart] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem("tasksider_active_timer_start");
+      return saved ? Number(saved) : null;
+    } catch (_) {
+      return null;
+    }
+  });
+
+  const [activeElapsed, setActiveElapsed] = useState<number>(0);
+
+  // 1-second live ticker effect for running timer
+  useEffect(() => {
+    if (!activeTaskId || !activeTimerStart) {
+      setActiveElapsed(0);
+      return;
+    }
+
+    const calcElapsed = () => {
+      const now = Date.now();
+      const diffSec = Math.max(0, Math.floor((now - activeTimerStart) / 1000));
+      setActiveElapsed(diffSec);
+    };
+
+    calcElapsed();
+    const interval = setInterval(calcElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [activeTaskId, activeTimerStart]);
+
   const [dragState, setDragState] = useState<DragState>({
     taskId: "",
     taskTitle: "",
@@ -179,25 +237,63 @@ export function useTaskStore() {
     [scheduleSave]
   );
 
+function getTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
   // Compute rows, counts, and stats
-  const rebuild = useCallback((): { rows: FlatRow[]; topRows: FlatRow[]; openCount: number } => {
+  const rebuild = useCallback((): {
+    rows: FlatRow[];
+    topRows: FlatRow[];
+    openCount: number;
+    futureCount: number;
+  } => {
+    const todayStr = getTodayDateString();
+
+    function isFutureTask(t: TaskItem): boolean {
+      return !!(t.dueDate && t.dueDate > todayStr);
+    }
+
     let open = 0;
     function countOpen(list: TaskItem[]) {
       for (const t of list) {
-        if (!t.archived && !t.done) open++;
-        countOpen(t.children);
+        if (!t.archived && !t.done) {
+          if (showFutureTasks || !isFutureTask(t)) {
+            open++;
+          }
+        }
+        if (showFutureTasks || !isFutureTask(t)) {
+          countOpen(t.children);
+        }
       }
     }
     countOpen(tasks);
+
+    let futureCount = 0;
+    function countFuture(list: TaskItem[]) {
+      for (const t of list) {
+        if (!t.archived && !t.done && isFutureTask(t)) {
+          futureCount++;
+        }
+        countFuture(t.children);
+      }
+    }
+    countFuture(tasks);
 
     const q = query.trim().toLowerCase();
     function matchTitle(t: TaskItem): boolean {
       return !q || (t.title || "").toLowerCase().includes(q);
     }
-    function hasMatch(t: TaskItem): boolean {
+    function hasQueryMatch(t: TaskItem): boolean {
       if (matchTitle(t)) return true;
       for (const c of t.children) {
-        if (hasMatch(c)) return true;
+        if (!showArchived && c.archived) continue;
+        if (!showFutureTasks && isFutureTask(c)) continue;
+        if (hasQueryMatch(c)) return true;
       }
       return false;
     }
@@ -207,6 +303,7 @@ export function useTaskStore() {
       let total = 0;
       for (const c of t.children) {
         if (!showArchived && c.archived) continue;
+        if (!showFutureTasks && isFutureTask(c)) continue;
         total++;
         if (c.done) done++;
         const s = stats(c);
@@ -221,7 +318,13 @@ export function useTaskStore() {
     function pushAll(list: TaskItem[], depth: number, rootId: string) {
       for (const a of list) {
         if (!showArchived && a.archived) continue;
+        if (!showFutureTasks && isFutureTask(a)) continue;
         const sa = stats(a);
+        const visibleChildren = a.children.filter((c) => {
+          if (!showArchived && c.archived) return false;
+          if (!showFutureTasks && isFutureTask(c)) return false;
+          return true;
+        });
         out.push({
           id: a.id,
           title: a.title,
@@ -231,9 +334,12 @@ export function useTaskStore() {
           archived: !!a.archived,
           depth,
           rootId,
-          hasChildren: a.children.length > 0,
+          hasChildren: visibleChildren.length > 0,
           doneCount: sa.done,
           totalCount: sa.total,
+          dueDate: a.dueDate,
+          duration: a.duration,
+          timeSpent: a.timeSpent,
         });
         pushAll(a.children, depth + 1, rootId);
       }
@@ -242,8 +348,16 @@ export function useTaskStore() {
     function walk(list: TaskItem[], depth: number, rootId: string) {
       for (const t of list) {
         if (!showArchived && t.archived) continue;
+        if (!showFutureTasks && isFutureTask(t)) continue;
         const rid = depth === 0 ? t.id : rootId;
         const st = stats(t);
+        const visibleChildren = t.children.filter((c) => {
+          if (!showArchived && c.archived) return false;
+          if (!showFutureTasks && isFutureTask(c)) return false;
+          return true;
+        });
+        const hasChildren = visibleChildren.length > 0;
+
         if (!q) {
           out.push({
             id: t.id,
@@ -254,13 +368,16 @@ export function useTaskStore() {
             archived: !!t.archived,
             depth,
             rootId: rid,
-            hasChildren: t.children.length > 0,
+            hasChildren,
             doneCount: st.done,
             totalCount: st.total,
+            dueDate: t.dueDate,
+            duration: t.duration,
+            timeSpent: t.timeSpent,
           });
           if (t.expanded) walk(t.children, depth + 1, rid);
         } else {
-          if (!hasMatch(t)) continue;
+          if (!hasQueryMatch(t)) continue;
           out.push({
             id: t.id,
             title: t.title,
@@ -270,9 +387,12 @@ export function useTaskStore() {
             archived: !!t.archived,
             depth,
             rootId: rid,
-            hasChildren: t.children.length > 0,
+            hasChildren,
             doneCount: st.done,
             totalCount: st.total,
+            dueDate: t.dueDate,
+            duration: t.duration,
+            timeSpent: t.timeSpent,
           });
           if (matchTitle(t)) {
             pushAll(t.children, depth + 1, rid);
@@ -285,12 +405,92 @@ export function useTaskStore() {
 
     walk(tasks, 0, "");
     const topRows = out.filter((r) => r.depth === 0);
-    return { rows: out, topRows, openCount: open };
-  }, [tasks, query, showArchived]);
+    return { rows: out, topRows, openCount: open, futureCount };
+  }, [tasks, query, showArchived, showFutureTasks]);
 
-  const { rows, topRows, openCount } = rebuild();
+  const { rows, topRows, openCount, futureCount } = rebuild();
 
   // Task Actions
+  const stopTimer = useCallback(() => {
+    if (!activeTaskId || !activeTimerStart) {
+      setActiveTaskId(null);
+      setActiveTimerStart(null);
+      setActiveElapsed(0);
+      try {
+        localStorage.removeItem("tasksider_active_task_id");
+        localStorage.removeItem("tasksider_active_timer_start");
+      } catch (_) {}
+      return;
+    }
+
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - activeTimerStart) / 1000));
+    const currentActiveId = activeTaskId;
+
+    setActiveTaskId(null);
+    setActiveTimerStart(null);
+    setActiveElapsed(0);
+    try {
+      localStorage.removeItem("tasksider_active_task_id");
+      localStorage.removeItem("tasksider_active_timer_start");
+    } catch (_) {}
+
+    if (elapsedSeconds > 0) {
+      updateTasks((list) => {
+        const r = findNode(currentActiveId, list);
+        if (r) {
+          r.node.timeSpent = (r.node.timeSpent || 0) + elapsedSeconds;
+          r.node.updatedAt = Date.now();
+        }
+        return list;
+      });
+    }
+  }, [activeTaskId, activeTimerStart, updateTasks]);
+
+  const startTimer = useCallback(
+    (taskId: string) => {
+      if (activeTaskId === taskId) return;
+
+      if (activeTaskId && activeTimerStart) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - activeTimerStart) / 1000));
+        if (elapsed > 0) {
+          const oldId = activeTaskId;
+          updateTasks((list) => {
+            const r = findNode(oldId, list);
+            if (r) {
+              r.node.timeSpent = (r.node.timeSpent || 0) + elapsed;
+              r.node.updatedAt = Date.now();
+            }
+            return list;
+          });
+        }
+      }
+
+      const now = Date.now();
+      setActiveTaskId(taskId);
+      setActiveTimerStart(now);
+      setActiveElapsed(0);
+      try {
+        localStorage.setItem("tasksider_active_task_id", taskId);
+        localStorage.setItem("tasksider_active_timer_start", String(now));
+      } catch (_) {}
+    },
+    [activeTaskId, activeTimerStart, updateTasks]
+  );
+
+  const setDuration = useCallback(
+    (id: string, minutes?: number) => {
+      updateTasks((list) => {
+        const r = findNode(id, list);
+        if (r) {
+          r.node.duration = minutes && minutes > 0 ? minutes : undefined;
+          r.node.updatedAt = Date.now();
+        }
+        return list;
+      });
+    },
+    [updateTasks]
+  );
+
   const addTask = useCallback(
     (title: string, parentId?: string): string => {
       const clean = (title || "").trim();
@@ -316,6 +516,9 @@ export function useTaskStore() {
 
   const toggleDone = useCallback(
     (id: string) => {
+      if (activeTaskId === id) {
+        stopTimer();
+      }
       function setDoneRecursive(t: TaskItem, v: boolean) {
         t.done = v;
         t.updatedAt = Date.now();
@@ -329,7 +532,7 @@ export function useTaskStore() {
         return list;
       });
     },
-    [updateTasks]
+    [activeTaskId, stopTimer, updateTasks]
   );
 
   const toggleExpanded = useCallback(
@@ -372,6 +575,20 @@ export function useTaskStore() {
     [updateTasks]
   );
 
+  const setDueDate = useCallback(
+    (id: string, dueDate?: string) => {
+      updateTasks((list) => {
+        const r = findNode(id, list);
+        if (r) {
+          r.node.dueDate = dueDate ? dueDate.trim() : undefined;
+          r.node.updatedAt = Date.now();
+        }
+        return list;
+      });
+    },
+    [updateTasks]
+  );
+
   const renameTask = useCallback(
     (id: string, title: string) => {
       const clean = (title || "").trim();
@@ -390,6 +607,9 @@ export function useTaskStore() {
 
   const removeTask = useCallback(
     (id: string) => {
+      if (activeTaskId === id) {
+        stopTimer();
+      }
       updateTasks((list) => {
         const r = findNode(id, list);
         if (r) {
@@ -398,7 +618,7 @@ export function useTaskStore() {
         return list;
       });
     },
-    [updateTasks]
+    [activeTaskId, stopTimer, updateTasks]
   );
 
   const archiveTask = useCallback(
@@ -558,13 +778,13 @@ export function useTaskStore() {
     refreshSyncStatus();
   }, [refreshSyncStatus]);
 
-  const startGoogleAuth = useCallback(
-    async (clientId?: string) => {
+  const connectFirebase = useCallback(
+    async (url: string) => {
       setSyncStatus((prev) => ({ ...prev, syncing: true, error: undefined }));
       try {
         const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-        const status = await tauriInvoke<SyncStatus>("start_google_auth", {
-          clientId: clientId ? clientId.trim() : null,
+        const status = await tauriInvoke<SyncStatus>("set_firebase_url", {
+          url: url.trim(),
         });
         setSyncStatus(status);
 
@@ -589,48 +809,82 @@ export function useTaskStore() {
     []
   );
 
-  const disconnectGoogle = useCallback(async () => {
+  const disconnectFirebase = useCallback(async () => {
     try {
       const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-      const status = await tauriInvoke<SyncStatus>("disconnect_google");
+      const status = await tauriInvoke<SyncStatus>("disconnect_firebase");
       setSyncStatus(status);
     } catch (e) {
-      console.warn("Could not disconnect Google", e);
+      console.warn("Could not disconnect Firebase", e);
     }
   }, []);
 
-  const syncNow = useCallback(async () => {
-    setSyncStatus((prev) => ({ ...prev, syncing: true, error: undefined }));
-    try {
-      const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-      const updatedJson = await tauriInvoke<string | null>("sync_tasks_now");
-      if (updatedJson) {
-        const parsed = JSON.parse(updatedJson);
-        if (parsed && Array.isArray(parsed.tasks)) {
-          ensureArchived(parsed.tasks);
-          setTasks(parsed.tasks);
+  const syncNow = useCallback(
+    async (quiet = false) => {
+      if (!quiet) {
+        setSyncStatus((prev) => ({ ...prev, syncing: true, error: undefined }));
+      }
+      try {
+        const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+        const updatedJson = await tauriInvoke<string | null>("sync_tasks_now");
+        if (updatedJson) {
+          const parsed = JSON.parse(updatedJson);
+          if (parsed && Array.isArray(parsed.tasks)) {
+            ensureArchived(parsed.tasks);
+            setTasks(parsed.tasks);
+          }
+        }
+        await refreshSyncStatus();
+      } catch (err: any) {
+        if (!quiet) {
+          setSyncStatus((prev) => ({
+            ...prev,
+            syncing: false,
+            error: typeof err === "string" ? err : err?.message || String(err),
+          }));
+          throw err;
         }
       }
-      await refreshSyncStatus();
-    } catch (err: any) {
-      setSyncStatus((prev) => ({
-        ...prev,
-        syncing: false,
-        error: typeof err === "string" ? err : err?.message || String(err),
-      }));
-      throw err;
-    }
-  }, [refreshSyncStatus]);
+    },
+    [refreshSyncStatus]
+  );
+
+  // Background polling to automatically catch collaborator changes
+  useEffect(() => {
+    if (!syncStatus.connected) return;
+
+    const interval = setInterval(() => {
+      syncNow(true).catch(() => {});
+    }, 25000);
+
+    const onFocus = () => {
+      syncNow(true).catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [syncStatus.connected, syncNow]);
 
   return {
     tasks,
     rows,
     topRows,
     openCount,
+    futureCount,
     query,
     setQuery,
     showArchived,
     setShowArchived,
+    showFutureTasks,
+    setShowFutureTasks,
+    activeTaskId,
+    activeElapsed,
+    startTimer,
+    stopTimer,
+    setDuration,
     dragState,
     startDrag,
     updateDragTarget,
@@ -640,6 +894,7 @@ export function useTaskStore() {
     toggleExpanded,
     expand,
     setPriority,
+    setDueDate,
     renameTask,
     removeTask,
     archiveTask,
@@ -648,8 +903,8 @@ export function useTaskStore() {
     isDescendant,
     syncStatus,
     syncNow,
-    startGoogleAuth,
-    disconnectGoogle,
+    connectFirebase,
+    disconnectFirebase,
     refreshSyncStatus,
   };
 }

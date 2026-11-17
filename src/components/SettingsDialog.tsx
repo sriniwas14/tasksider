@@ -11,8 +11,8 @@ interface SettingsDialogProps {
   onSelectTheme: (theme: Theme) => void;
   onClose: () => void;
   syncStatus: SyncStatus;
-  onStartAuth: (clientId?: string) => Promise<void>;
-  onDisconnect: () => Promise<void>;
+  onConnectFirebase: (url: string) => Promise<void>;
+  onDisconnectFirebase: () => Promise<void>;
   onSyncNow: () => Promise<void>;
   fontId: string;
   onChangeFont: (id: string) => void;
@@ -29,8 +29,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onSelectTheme,
   onClose,
   syncStatus,
-  onStartAuth,
-  onDisconnect,
+  onConnectFirebase,
+  onDisconnectFirebase,
   onSyncNow,
   fontId,
   onChangeFont,
@@ -137,15 +137,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             />
           </div>
 
-          {/* Section 3: Google Drive Cloud Sync */}
+          {/* Section 3: Firebase Database Sync */}
           <div
             className="pt-2.5 border-t"
             style={{ borderColor: "var(--hairline)" }}
           >
             <CloudSyncSettings
               syncStatus={syncStatus}
-              onStartAuth={onStartAuth}
-              onDisconnect={onDisconnect}
+              onConnect={onConnectFirebase}
+              onDisconnect={onDisconnectFirebase}
               onSyncNow={onSyncNow}
             />
           </div>

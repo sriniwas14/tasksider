@@ -7,8 +7,7 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-pub mod auth;
-pub mod drive;
+pub mod firebase;
 pub mod sync;
 
 #[cfg(target_os = "linux")]
@@ -111,8 +110,8 @@ async fn save_tasks(data: String) -> Result<(), String> {
 
     fs::write(&path, &data).map_err(|e| e.to_string())?;
 
-    // Background push to Drive if signed in
-    if auth::load_auth_record().is_some() {
+    // Background push to Firebase if configured
+    if firebase::load_firebase_config().is_some() {
         tauri::async_runtime::spawn(async {
             let _ = sync::execute_sync().await;
         });
@@ -122,16 +121,18 @@ async fn save_tasks(data: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn start_google_auth(client_id: Option<String>) -> Result<sync::SyncStatus, String> {
-    auth::start_oauth_flow(client_id).await?;
-    // Trigger initial sync immediately after logging in
+async fn set_firebase_url(url: String) -> Result<sync::SyncStatus, String> {
+    let config = firebase::normalize_firebase_url(&url)?;
+    firebase::save_firebase_config(&config)?;
+    // Trigger initial sync immediately after configuring Firebase URL
     let _ = sync::execute_sync().await;
     Ok(sync::get_current_sync_status())
 }
 
 #[tauri::command]
-fn disconnect_google() -> Result<sync::SyncStatus, String> {
-    auth::delete_auth_record()?;
+fn disconnect_firebase() -> Result<sync::SyncStatus, String> {
+    firebase::delete_firebase_config()?;
+    sync::reset_last_synced();
     Ok(sync::get_current_sync_status())
 }
 
@@ -244,15 +245,15 @@ pub fn run() {
             toggle_window,
             hide_window,
             quit_app,
-            start_google_auth,
-            disconnect_google,
+            set_firebase_url,
+            disconnect_firebase,
             get_sync_status,
             sync_tasks_now,
             set_sidebar_width
         ])
         .setup(|app| {
-            // Background sync pull on launch if user is authenticated with Google Drive
-            if auth::load_auth_record().is_some() {
+            // Background sync pull on launch if Firebase is configured
+            if firebase::load_firebase_config().is_some() {
                 tauri::async_runtime::spawn(async {
                     let _ = sync::execute_sync().await;
                 });

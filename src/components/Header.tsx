@@ -3,16 +3,22 @@ import { X, Search, Settings } from "lucide-react";
 
 interface HeaderProps {
   openCount: number;
+  futureCount?: number;
   query: string;
   onQueryChange: (q: string) => void;
+  showFutureTasks: boolean;
+  onToggleShowFutureTasks: () => void;
   onOpenSettings: () => void;
   onClose: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   openCount,
+  futureCount,
   query,
   onQueryChange,
+  showFutureTasks,
+  onToggleShowFutureTasks,
   onOpenSettings,
   onClose,
 }) => {
@@ -107,6 +113,53 @@ export const Header: React.FC<HeaderProps> = ({
           >
             ×
           </button>
+        )}
+      </div>
+
+      {/* Show Future Tasks Toggle Row */}
+      <div className="flex items-center justify-between px-0.5 pt-0.5">
+        <button
+          type="button"
+          onClick={onToggleShowFutureTasks}
+          className="flex items-center gap-2 group cursor-pointer select-none"
+        >
+          {/* Toggle track */}
+          <div
+            style={{
+              backgroundColor: showFutureTasks ? "var(--accent)" : "var(--input)",
+              borderColor: showFutureTasks ? "var(--accent)" : "var(--hairline)",
+            }}
+            className="w-7 h-4 rounded-full border relative transition-colors duration-200"
+          >
+            {/* Toggle thumb */}
+            <div
+              style={{
+                backgroundColor: showFutureTasks ? "var(--bg)" : "var(--muted)",
+              }}
+              className={`w-3 h-3 rounded-full absolute top-0.5 transition-all duration-200 ${
+                showFutureTasks ? "left-3.5" : "left-0.5"
+              }`}
+            />
+          </div>
+          <span
+            style={{ color: showFutureTasks ? "var(--text)" : "var(--muted)" }}
+            className="text-xs font-medium group-hover:text-[var(--text)] transition-colors"
+          >
+            Show Future Tasks
+          </span>
+        </button>
+
+        {!showFutureTasks && typeof futureCount === "number" && futureCount > 0 && (
+          <span
+            style={{
+              backgroundColor: "var(--accent-soft)",
+              color: "var(--accent)",
+              borderColor: "var(--hairline)",
+            }}
+            className="text-[10px] px-2 py-0.5 rounded-full border font-medium"
+          >
+            {futureCount} hidden
+          </span>
         )}
       </div>
     </div>

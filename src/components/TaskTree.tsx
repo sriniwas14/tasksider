@@ -7,12 +7,18 @@ interface TaskTreeProps {
   rows: FlatRow[];
   dragState: DragState;
   inlineFor: string;
+  activeTaskId: string | null;
+  activeElapsed: number;
   onSetInlineFor: (id: string) => void;
   onToggleDone: (id: string) => void;
   onToggleExpanded: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onAddSubtask: (title: string, parentId?: string) => void;
   onContextMenu: (e: React.MouseEvent, id: string, archived: boolean) => void;
+  onOpenDatePicker?: (e: React.MouseEvent, id: string, currentDate?: string) => void;
+  onOpenDurationMenu?: (e: React.MouseEvent, id: string, currentDuration?: number) => void;
+  onStartTimer: (id: string) => void;
+  onStopTimer: () => void;
   onStartDrag: (id: string, title: string, priority: Priority) => void;
   onUpdateDragTarget: (targetId: string, position: DropPosition | "") => void;
   onMoveTask: (sourceId: string, targetId: string, position: DropPosition) => void;
@@ -23,12 +29,18 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
   rows,
   dragState,
   inlineFor,
+  activeTaskId,
+  activeElapsed,
   onSetInlineFor,
   onToggleDone,
   onToggleExpanded,
   onRename,
   onAddSubtask,
   onContextMenu,
+  onOpenDatePicker,
+  onOpenDurationMenu,
+  onStartTimer,
+  onStopTimer,
   onStartDrag,
   onUpdateDragTarget,
   onMoveTask,
@@ -119,6 +131,8 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
                 dropBefore={dropBefore}
                 dropAfter={dropAfter}
                 dropInside={dropInside}
+                isActive={activeTaskId === row.id}
+                activeElapsed={activeTaskId === row.id ? activeElapsed : 0}
                 onToggleDone={onToggleDone}
                 onToggleExpanded={onToggleExpanded}
                 onRename={onRename}
@@ -127,6 +141,10 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
                   setSubtaskTitle("");
                 }}
                 onContextMenu={onContextMenu}
+                onOpenDatePicker={onOpenDatePicker}
+                onOpenDurationMenu={onOpenDurationMenu}
+                onStartTimer={onStartTimer}
+                onStopTimer={onStopTimer}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
